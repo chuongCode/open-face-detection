@@ -35,12 +35,25 @@ while not os.path.exists(temp_output_file):
 #Openface saves info to a file, and we open that file here
 data = open(temp_output_file,'r')
 
-# Initialize variables to store the previous frame's angles
+# Initialize variables to store the current expression state and cooldown period for gesture detection
+# This is for the purpose of making sure the cam doesn't flag going back to neutral face state as another detection of smiling or surprise
+expression_state = 'neutral'
+cooldown_start = None
+cooldown_period = 2.0
+
+# Initialize variables to store the amount of change in angles and distances over the gesture detection window
 accumulated_pitch_diff = 0.0
 accumulated_yaw_diff = 0.0
 accumulated_roll_diff = 0.0
+
+accumulated_smile_change = 0.0
+accumulated_surprise_mouth_change = 0.0
+accumulated_surprise_eyebrow_change = 0.0
+
 start_time = None
+expression_start_time = None
 gesture_detection_window = 0.8
+expression_detection_window = 0.2
 
 # Thresholds for gesture detection
 pitch_threshold_for_yes = 0.8
@@ -48,13 +61,16 @@ yaw_threshold_for_no = 1
 roll_threshold_for_indian_nod = 1
 
 # Thresholds for smile and surprise
-smile_threshold = 68
-surprise_threshold_eyebrows = 93
-surprise_threshold_mouth = 33
+smile_threshold = 20
+surprise_threshold_eyebrows = 8
+surprise_threshold_mouth = 20
 
 previous_pitch = None
 previous_yaw = None
 previous_roll = None
+previous_lip_distance = None
+previous_mouth_open_distance = None
+previous_eyebrow_distance = None
 
 #This loop repeats while openface is still running
 #Inside the loop, we read from the file that openface outputs to and check to see if there's anything new
@@ -72,13 +88,21 @@ while(of2.poll() == None):
 			for i in range(11,11+landmark_count):
 				landmarks.append((of_values[i],of_values[i+landmark_count]))
 
+			if cooldown_start is not None and (timestamp - cooldown_start < cooldown_period):
+				continue
+
 			# If this is the first iteration, initialize the previous variables and skip the rest of the loop
 			if previous_pitch is None or previous_yaw is None or previous_roll is None:
 				previous_pitch = pitch
 				previous_yaw = yaw
 				previous_roll = roll
 				start_time = timestamp
+				expression_start_time = timestamp
 				continue  # Skip the rest of this loop iteration
+
+			lip_distance = dist(landmarks[48], landmarks[54])
+			eyebrow_distance = (dist(landmarks[19], landmarks[51]) + dist(landmarks[24], landmarks[51])) / 2  # Average eyebrow height
+			mouth_open_distance = dist(landmarks[51], landmarks[57])
 
 			# Calculate the difference in angles from the previous frame
 			pitch_diff = abs(pitch - previous_pitch)
@@ -94,36 +118,57 @@ while(of2.poll() == None):
 			previous_pitch = pitch
 			previous_yaw = yaw
 			previous_roll = roll
+
+			# Calculate changes in distances if previous distances were set
+			if previous_lip_distance is not None and previous_mouth_open_distance is not None and previous_eyebrow_distance is not None:
+				accumulated_smile_change += abs(lip_distance - previous_lip_distance)
+				accumulated_surprise_mouth_change += abs(mouth_open_distance - previous_mouth_open_distance)
+				accumulated_surprise_eyebrow_change += abs(eyebrow_distance - previous_eyebrow_distance)
+
+			previous_lip_distance = lip_distance
+			previous_mouth_open_distance = mouth_open_distance
+			previous_eyebrow_distance = eyebrow_distance
 			
-			# # Check if the current timestamp exceeds the gesture detection window
-			# if timestamp - start_time >= gesture_detection_window:
+			# Check if the current timestamp exceeds the gesture detection window
+			if timestamp - start_time >= gesture_detection_window:
 
-			# 	if accumulated_pitch_diff > pitch_threshold_for_yes:
-			# 		print("Yes")
-			# 	elif accumulated_yaw_diff > yaw_threshold_for_no:
-			# 		print("No")
-			# 	elif accumulated_roll_diff > roll_threshold_for_indian_nod:
-			# 		print("Indian Nod")
+				if accumulated_pitch_diff > pitch_threshold_for_yes:
+					print("Yes")
+				elif accumulated_yaw_diff > yaw_threshold_for_no:
+					print("No")
+				elif accumulated_roll_diff > roll_threshold_for_indian_nod:
+					print("Indian Nod")
 
-			# 	# Resetting the accumulated differences and the start time for the next window
-			# 	accumulated_pitch_diff = 0.0
-			# 	accumulated_yaw_diff = 0.0
-			# 	accumulated_roll_diff = 0.0
-			# 	start_time = timestamp  # Move this inside the if condition to correctly reset after processing a window
-			lip_distance = dist(landmarks[48], landmarks[54])
-			eyebrow_raise_left = dist(landmarks[19], landmarks[51])
-			eyebrow_raise_right = dist(landmarks[24], landmarks[51])
-			mouth_open_distance = dist(landmarks[51], landmarks[57])
+				# Resetting the accumulated differences and the start time for the next window
+				accumulated_pitch_diff = 0.0
+				accumulated_yaw_diff = 0.0
+				accumulated_roll_diff = 0.0
 
-			# Detect Smile
-			if lip_distance > smile_threshold:
-				print("Smile detected")
-				
-			# Detect Surprise
-			if (eyebrow_raise_left > surprise_threshold_eyebrows and
-				eyebrow_raise_right > surprise_threshold_eyebrows and
-				mouth_open_distance > surprise_threshold_mouth):
-				print("Surprised expression detected")
+				start_time = timestamp
+
+			# Check if the current timestamp exceeds the expression detection window
+			if timestamp - expression_start_time >= expression_detection_window:
+				# Check for smile and surprise expressions
+				detected_expression = None
+				if accumulated_smile_change > smile_threshold:
+					detected_expression = 'smiley'
+				elif accumulated_surprise_eyebrow_change > surprise_threshold_eyebrows and accumulated_surprise_mouth_change > surprise_threshold_mouth:
+					detected_expression = 'surprised'
+
+				# If an expression was detected, update the expression state and start the cooldown period
+				if detected_expression is not None and detected_expression != expression_state:
+					print(f"You look prototypically {detected_expression.capitalize()}!")
+					expression_state = detected_expression
+					cooldown_start = timestamp
+				elif detected_expression is None and expression_state != 'neutral':
+					expression_state = 'neutral'
+
+				# Resetting the accumulated differences and the start time for the next window
+				accumulated_smile_change = 0.0
+				accumulated_surprise_mouth_change = 0.0
+				accumulated_surprise_eyebrow_change = 0.0
+
+				expression_start_time = timestamp
 
 			# print(f"Lip Distance: {lip_distance:.2f}, Eyebrow Raise (L/R): {eyebrow_raise_left:.2f}/{eyebrow_raise_right:.2f}, Mouth Open: {mouth_open_distance:.2f}")
 
