@@ -1,2 +1,7 @@
+model/patch_experts/cen_patches_0.25_of.dat filter=lfs diff=lfs merge=lfs -text
+model/patch_experts/cen_patches_0.35_of.dat filter=lfs diff=lfs merge=lfs -text
+opencv_world410.dll filter=lfs diff=lfs merge=lfs -text
+model/patch_experts/cen_patches_0.50_of.dat filter=lfs diff=lfs merge=lfs -text
+model/patch_experts/cen_patches_1.00_of.dat filter=lfs diff=lfs merge=lfs -text
 *.dat filter=lfs diff=lfs merge=lfs -text
 *.dll filter=lfs diff=lfs merge=lfs -text
