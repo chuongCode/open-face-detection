@@ -2,6 +2,7 @@
 
 from subprocess import Popen, DEVNULL
 import shlex, os, errno, time, glob
+from math import dist
 
 #Constants for later use
 of2_verbose = False
@@ -39,12 +40,17 @@ accumulated_pitch_diff = 0.0
 accumulated_yaw_diff = 0.0
 accumulated_roll_diff = 0.0
 start_time = None
-gesture_detection_window = 0.75
+gesture_detection_window = 0.8
 
 # Thresholds for gesture detection
 pitch_threshold_for_yes = 0.8
 yaw_threshold_for_no = 1
 roll_threshold_for_indian_nod = 1
+
+# Thresholds for smile and surprise
+smile_threshold = 68
+surprise_threshold_eyebrows = 93
+surprise_threshold_mouth = 33
 
 previous_pitch = None
 previous_yaw = None
@@ -62,9 +68,9 @@ while(of2.poll() == None):
 			of_values = [float(v) for v in line.split(', ')]
 			timestamp, confidence, success = of_values[2:5]
 			pitch, yaw, roll = of_values[8:11]
-			# landmarks = []
-			# for i in range(11,11+landmark_count):
-			# 	landmarks.append((of_values[i],of_values[i+landmark_count]))
+			landmarks = []
+			for i in range(11,11+landmark_count):
+				landmarks.append((of_values[i],of_values[i+landmark_count]))
 
 			# If this is the first iteration, initialize the previous variables and skip the rest of the loop
 			if previous_pitch is None or previous_yaw is None or previous_roll is None:
@@ -89,21 +95,37 @@ while(of2.poll() == None):
 			previous_yaw = yaw
 			previous_roll = roll
 			
-			# Check if the current timestamp exceeds the gesture detection window
-			if timestamp - start_time >= gesture_detection_window:
+			# # Check if the current timestamp exceeds the gesture detection window
+			# if timestamp - start_time >= gesture_detection_window:
 
-				if accumulated_pitch_diff > pitch_threshold_for_yes:
-					print("Yes")
-				elif accumulated_yaw_diff > yaw_threshold_for_no:
-					print("No")
-				elif accumulated_roll_diff > roll_threshold_for_indian_nod:
-					print("Indian Nod")
+			# 	if accumulated_pitch_diff > pitch_threshold_for_yes:
+			# 		print("Yes")
+			# 	elif accumulated_yaw_diff > yaw_threshold_for_no:
+			# 		print("No")
+			# 	elif accumulated_roll_diff > roll_threshold_for_indian_nod:
+			# 		print("Indian Nod")
 
-				# Resetting the accumulated differences and the start time for the next window
-				accumulated_pitch_diff = 0.0
-				accumulated_yaw_diff = 0.0
-				accumulated_roll_diff = 0.0
-				start_time = timestamp  # Move this inside the if condition to correctly reset after processing a window
+			# 	# Resetting the accumulated differences and the start time for the next window
+			# 	accumulated_pitch_diff = 0.0
+			# 	accumulated_yaw_diff = 0.0
+			# 	accumulated_roll_diff = 0.0
+			# 	start_time = timestamp  # Move this inside the if condition to correctly reset after processing a window
+			lip_distance = dist(landmarks[48], landmarks[54])
+			eyebrow_raise_left = dist(landmarks[19], landmarks[51])
+			eyebrow_raise_right = dist(landmarks[24], landmarks[51])
+			mouth_open_distance = dist(landmarks[51], landmarks[57])
+
+			# Detect Smile
+			if lip_distance > smile_threshold:
+				print("Smile detected")
+				
+			# Detect Surprise
+			if (eyebrow_raise_left > surprise_threshold_eyebrows and
+				eyebrow_raise_right > surprise_threshold_eyebrows and
+				mouth_open_distance > surprise_threshold_mouth):
+				print("Surprised expression detected")
+
+			# print(f"Lip Distance: {lip_distance:.2f}, Eyebrow Raise (L/R): {eyebrow_raise_left:.2f}/{eyebrow_raise_right:.2f}, Mouth Open: {mouth_open_distance:.2f}")
 
 
 		except ValueError:
