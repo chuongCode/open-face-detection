@@ -45,11 +45,11 @@ gesture_detection_window = 0.8
 # Thresholds for gesture detection
 pitch_threshold_for_yes = 0.8
 yaw_threshold_for_no = 1
-roll_threshold_for_indian_nod = 1
+roll_threshold_for_indian_nod = 0.8
 
 # Thresholds for smile and surprise
-smile_threshold = 68
-surprise_threshold_eyebrows = 93
+smile_threshold = 72
+surprise_threshold_eyebrows = 92
 surprise_threshold_mouth = 33
 
 previous_pitch = None
@@ -78,7 +78,7 @@ while(of2.poll() == None):
 				previous_yaw = yaw
 				previous_roll = roll
 				start_time = timestamp
-				continue  # Skip the rest of this loop iteration
+				continue
 
 			# Calculate the difference in angles from the previous frame
 			pitch_diff = abs(pitch - previous_pitch)
@@ -109,8 +109,8 @@ while(of2.poll() == None):
 				accumulated_pitch_diff = 0.0
 				accumulated_yaw_diff = 0.0
 				accumulated_roll_diff = 0.0
-				start_time = timestamp  # Move this inside the if condition to correctly reset after processing a window
-				
+				start_time = timestamp
+
 			lip_distance = dist(landmarks[48], landmarks[54])
 			eyebrow_raise_left = dist(landmarks[19], landmarks[51])
 			eyebrow_raise_right = dist(landmarks[24], landmarks[51])
@@ -132,10 +132,6 @@ while(of2.poll() == None):
 		except ValueError:
 			#This exception handles the header line
 			continue
-			
-		#********************************************
-		# Most, maybe all, of your code will go here
-		#********************************************
 
 		# print("time:", timestamp, "\tpitch:", pitch, "\tyaw:", yaw, "\troll:", roll)
 	else:
